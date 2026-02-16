@@ -154,6 +154,17 @@ class GitRepo:
                 if verbose_init:
                     self.io.tool_error(f"Unable to read submodule {submodule.name} at {submodule_path}: {err}")
 
+    def get_repo(self, fname):
+        """Return the GitRepo instance for a given file path."""
+        fname = Path(fname)
+        fname = fname.resolve()
+        if self.path_in_repo(fname, submodules=False):
+            return self
+        for submodule in self.submodules.values():
+            if submodule.get_repo(fname):
+                return submodule
+        return None
+
     def commit(self, fnames=None, context=None, message=None, aider_edits=False, coder=None):
         """
         Commit the specified files or all dirty files if none are specified.
@@ -307,7 +318,7 @@ class GitRepo:
             fnames = [str(self.abs_root_path(fn)) for fn in fnames]
             for fname in fnames:
                 try:
-                    self.repo.git.add(fname)
+                    self.get_repo(fname).git.add(fname)
                 except ANY_GIT_ERROR as err:
                     self.io.tool_error(f"Unable to add {fname}: {err}")
             cmd += ["--"] + fnames
@@ -417,7 +428,7 @@ class GitRepo:
 
         diffs = ""
         for fname in fnames:
-            if not self.path_in_repo(fname):
+            if not self.path_in_repo(fname, submodules=True):
                 diffs += f"Added {fname}\n"
 
         try:
@@ -596,13 +607,13 @@ class GitRepo:
 
         return self.aider_ignore_spec.match_file(fname)
 
-    def path_in_repo(self, path):
+    def path_in_repo(self, path, submodules=False):
         if not self.repo:
             return
         if not path:
             return
 
-        tracked_files = set(self.get_tracked_files())
+        tracked_files = set(self.get_tracked_files(submodules=submodules))
         return self.normalize_path(path) in tracked_files
 
     def abs_root_path(self, path):
