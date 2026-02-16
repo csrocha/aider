@@ -158,11 +158,17 @@ class GitRepo:
         """Return the GitRepo instance for a given file path."""
         fname = Path(fname)
         fname = fname.resolve()
-        if self.path_in_repo(fname, submodules=False):
-            return self
+        rname = fname.relative_to(self.root).as_posix()
+        try:
+            if self.repo.untracked_files and rname in self.repo.untracked_files or self.repo.git.ls_files(rname, error_unmatch=True):
+                return self
+        except ANY_GIT_ERROR:
+            pass
+        
         for submodule in self.submodules.values():
             if submodule.get_repo(fname):
                 return submodule
+
         return None
 
     def commit(self, fnames=None, context=None, message=None, aider_edits=False, coder=None):
