@@ -74,12 +74,14 @@ class GitRepo:
         subtree_only=False,
         git_commit_verify=True,
         attribute_co_authored_by=False,  # Added parameter
+        verbose_init=False,  # Added parameter to control verbose output during initialization
     ):
         self.io = io
         self.models = models
 
         self.normalized_path = {}
         self.tree_files = {}
+        self.submodules = {}
 
         self.attribute_author = attribute_author
         self.attribute_committer = attribute_committer
@@ -127,6 +129,30 @@ class GitRepo:
 
         if aider_ignore_file:
             self.aider_ignore_file = Path(aider_ignore_file)
+            
+        for submodule in self.repo.submodules:
+            try:
+                submodule_path = utils.safe_abs_path(submodule.abspath)
+                self.submodules[submodule.name] = GitRepo(
+                    io=self.io,
+                    fnames=[],
+                    git_dname=submodule_path,
+                    aider_ignore_file=self.aider_ignore_file,
+                    models=self.models,
+                    attribute_author=self.attribute_author,
+                    attribute_committer=self.attribute_committer,
+                    attribute_commit_message_author=self.attribute_commit_message_author,
+                    attribute_commit_message_committer=self.attribute_commit_message_committer,
+                    attribute_co_authored_by=self.attribute_co_authored_by,
+                    subtree_only=self.subtree_only,
+                    git_commit_verify=self.git_commit_verify,
+                    verbose_init=verbose_init,
+                    )
+                if verbose_init:
+                    self.io.tool_output(f"Found submodule: {submodule.name} at {submodule_path}")
+            except ANY_GIT_ERROR as err:
+                if verbose_init:
+                    self.io.tool_error(f"Unable to read submodule {submodule.name} at {submodule_path}: {err}")
 
     def commit(self, fnames=None, context=None, message=None, aider_edits=False, coder=None):
         """
@@ -430,7 +456,7 @@ class GitRepo:
 
         return diffs
 
-    def get_tracked_files(self):
+    def get_tracked_files(self, submodules=False):
         if not self.repo:
             return []
 
@@ -484,6 +510,12 @@ class GitRepo:
             self.io.tool_error(f"Unable to read staged files: {err}")
 
         res = [fname for fname in files if not self.ignored_file(fname)]
+
+        if submodules and self.submodules:
+            for name, submod in self.submodules.items():
+                res.remove(name)
+                submodule_files = submod.get_tracked_files(submodules=True)
+                res += [str((Path(submod.root) / fname).relative_to(self.root)) for fname in submodule_files]
 
         return res
 

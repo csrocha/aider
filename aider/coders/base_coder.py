@@ -15,6 +15,7 @@ import time
 import traceback
 from collections import defaultdict
 from datetime import datetime
+from itertools import chain
 
 # Optional dependency: used to convert locale codes (eg ``en_US``)
 # into human-readable language names (eg ``English``).
@@ -249,10 +250,13 @@ class Coder:
 
         # Repo
         if self.repo:
-            rel_repo_dir = self.repo.get_rel_repo_dir()
-            num_files = len(self.repo.get_tracked_files())
+            num_files = 0
+            respos = chain((self.repo,), self.repo.submodules.values())
+            for repo in respos:
+                rel_repo_dir = repo.get_rel_repo_dir()
+                num_files = len(repo.get_tracked_files(submodules=False))
 
-            lines.append(f"Git repo: {rel_repo_dir} with {num_files:,} files")
+                lines.append(f"Git repo: {rel_repo_dir} with {num_files:,} files")
             if num_files > 1000:
                 lines.append(
                     "Warning: For large repos, consider using --subtree-only and .aiderignore"
@@ -2152,7 +2156,7 @@ class Coder:
 
     def get_all_relative_files(self):
         if self.repo:
-            files = self.repo.get_tracked_files()
+            files = self.repo.get_tracked_files(submodules=True)
         else:
             files = self.get_inchat_relative_files()
 
