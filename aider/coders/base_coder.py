@@ -1590,19 +1590,26 @@ class Coder:
 
         if edited:
             self.aider_edited_files.update(edited)
-            saved_message = self.auto_commit(edited)
 
-            if not saved_message and hasattr(self.gpt_prompts, "files_content_gpt_edits_no_repo"):
-                saved_message = self.gpt_prompts.files_content_gpt_edits_no_repo
+            repos = self.repo.get_repos_map(edited) if self.repo else {}
+            
+            for repo, fnames in repos.items():
+                saved_message = self.auto_commit(fnames, repo=repo)
 
-            self.move_back_cur_messages(saved_message)
+                if not saved_message and hasattr(self.gpt_prompts, "files_content_gpt_edits_no_repo"):
+                    saved_message = self.gpt_prompts.files_content_gpt_edits_no_repo
+
+                self.move_back_cur_messages(saved_message)
 
         if self.reflected_message:
             return
 
         if edited and self.auto_lint:
             lint_errors = self.lint_edited(edited)
-            self.auto_commit(edited, context="Ran the linter")
+            
+            for repo, fnames in repos.items():
+                self.auto_commit(fnames, context="Ran the linter", repo=repo)
+                
             self.lint_outcome = not lint_errors
             if lint_errors:
                 ok = self.io.confirm_ask("Attempt to fix lint errors?")
@@ -2181,7 +2188,7 @@ class Coder:
             return
         if not self.dirty_commits:
             return
-        if not self.repo.is_dirty(path):
+        if not self.repo.get_repo(path).is_dirty(path):
             return
 
         # We need a committed copy of the file in order to /undo, so skip this
@@ -2203,7 +2210,7 @@ class Coder:
             self.check_for_dirty_commit(path)
             return True
 
-        if self.repo and self.repo.git_ignored_file(path):
+        if self.repo and self.repo.get_repo(path).git_ignored_file(path):
             self.io.tool_warning(f"Skipping edits to {path} that matches gitignore spec.")
             return
 
@@ -2221,7 +2228,7 @@ class Coder:
                 # actually already part of the repo.
                 # But let's only add if we need to, just to be safe.
                 if need_to_add:
-                    self.repo.repo.git.add(full_path)
+                    self.repo.get_repo(full_path).repo.git.add(full_path)
 
             self.abs_fnames.add(full_path)
             self.check_added_files()
@@ -2235,7 +2242,7 @@ class Coder:
             return
 
         if need_to_add:
-            self.repo.repo.git.add(full_path)
+            self.repo.get_repo(full_path).repo.git.add(full_path)
 
         self.abs_fnames.add(full_path)
         self.check_added_files()
@@ -2376,15 +2383,20 @@ class Coder:
 
         return context
 
-    def auto_commit(self, edited, context=None):
-        if not self.repo or not self.auto_commits or self.dry_run:
+    def auto_commit(self, edited, context=None, repo=None):
+        if repo:
+            edited = repo.rel_paths_from_repo(self.repo, edited)
+        else:
+            repo = self.repo
+            
+        if not repo or not self.auto_commits or self.dry_run:
             return
 
         if not context:
             context = self.get_context_from_history(self.cur_messages)
 
         try:
-            res = self.repo.commit(fnames=edited, context=context, aider_edits=True, coder=self)
+            res = repo.commit(fnames=edited, context=context, aider_edits=True, coder=self)
             if res:
                 self.show_auto_commit_outcome(res)
                 commit_hash, commit_message = res
@@ -2420,7 +2432,10 @@ class Coder:
         if not self.repo:
             return
 
-        self.repo.commit(fnames=self.need_commit_before_edits, coder=self)
+        repos = self.repo.get_repos_map(self.need_commit_before_edits)
+
+        for repo, paths in repos.items():
+            repo.commit(fnames=repo.rel_paths_from_repo(self.repo, paths), coder=self)
 
         # files changed, move cur messages back behind the files messages
         # self.move_back_cur_messages(self.gpt_prompts.files_content_local_edits)
