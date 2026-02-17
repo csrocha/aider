@@ -1,3 +1,4 @@
+from collections import defaultdict
 import contextlib
 import os
 import time
@@ -154,6 +155,20 @@ class GitRepo:
                 if verbose_init:
                     self.io.tool_error(f"Unable to read submodule {submodule.name} at {submodule_path}: {err}")
 
+    def get_all_repos(self):
+        """Return a list of all GitRepo instances, including submodules."""
+        repos = [self]
+        for submodule in self.submodules.values():
+            repos.extend(submodule.get_all_repos())
+        return repos
+    
+    def map_repo(self, func):
+        """Apply a function to all GitRepo instances, including submodules. Return a dict mapping each GitRepo to the function's result."""
+        res = {self: func(self)}
+        for submodule in self.submodules.values():
+            res.update(submodule.map_repo(func))
+        return res
+
     def get_repo(self, fname):
         """Return the GitRepo instance for a given file path."""
         fname = Path(fname)
@@ -171,6 +186,37 @@ class GitRepo:
 
         return None
 
+    def get_repos_map(self, fnames):
+        """Return a set of GitRepo instances corresponding to the given file paths."""
+        repos = defaultdict(set)
+        for fname in fnames:
+            repo = self.get_repo(fname)
+            if repo:
+                repos[repo].add(fname)
+            else:
+                self.io.tool_warning(f"File {fname} is not tracked in any git repository.")
+        return repos
+
+    def rel_path_from_repo(self, source_repo, fname):
+        """Return the relative path of a file from the repo root.
+        Args:
+            source_repo (GitRepo): The GitRepo instance representing the source repository.
+            fname (str or Path): The file path relative to source_repo to be made relative to self.
+        Returns:
+            str: The relative path to self.
+        """
+        return str(Path(source_repo.root, fname).relative_to(self.root))
+    
+    def rel_paths_from_repo(self, source_repo, fnames):
+        """Return the absolute path of a file in self based on a relative path from source_repo.
+        Args:
+            source_repo (GitRepo): The GitRepo instance representing the source repository.
+            fnames (list[str or Path]): The list of file path relative to source_repo to be converted to an absolute path in self.
+        Returns:
+            list[str]: The list of relative paths in self.
+        """
+        return [self.rel_path_from_repo(source_repo, fname) for fname in fnames]
+        
     def commit(self, fnames=None, context=None, message=None, aider_edits=False, coder=None):
         """
         Commit the specified files or all dirty files if none are specified.
@@ -324,7 +370,7 @@ class GitRepo:
             fnames = [str(self.abs_root_path(fn)) for fn in fnames]
             for fname in fnames:
                 try:
-                    self.get_repo(fname).git.add(fname)
+                    self.get_repo(fname).repo.git.add(fname)
                 except ANY_GIT_ERROR as err:
                     self.io.tool_error(f"Unable to add {fname}: {err}")
             cmd += ["--"] + fnames
