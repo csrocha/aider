@@ -1,3 +1,4 @@
+from collections import defaultdict
 import contextlib
 import os
 import time
@@ -74,12 +75,14 @@ class GitRepo:
         subtree_only=False,
         git_commit_verify=True,
         attribute_co_authored_by=False,  # Added parameter
+        verbose_init=False,  # Added parameter to control verbose output during initialization
     ):
         self.io = io
         self.models = models
 
         self.normalized_path = {}
         self.tree_files = {}
+        self.submodules = {}
 
         self.attribute_author = attribute_author
         self.attribute_committer = attribute_committer
@@ -127,7 +130,93 @@ class GitRepo:
 
         if aider_ignore_file:
             self.aider_ignore_file = Path(aider_ignore_file)
+            
+        for submodule in self.repo.submodules:
+            try:
+                submodule_path = utils.safe_abs_path(submodule.abspath)
+                self.submodules[submodule.name] = GitRepo(
+                    io=self.io,
+                    fnames=[],
+                    git_dname=submodule_path,
+                    aider_ignore_file=self.aider_ignore_file,
+                    models=self.models,
+                    attribute_author=self.attribute_author,
+                    attribute_committer=self.attribute_committer,
+                    attribute_commit_message_author=self.attribute_commit_message_author,
+                    attribute_commit_message_committer=self.attribute_commit_message_committer,
+                    attribute_co_authored_by=self.attribute_co_authored_by,
+                    subtree_only=self.subtree_only,
+                    git_commit_verify=self.git_commit_verify,
+                    verbose_init=verbose_init,
+                    )
+                if verbose_init:
+                    self.io.tool_output(f"Found submodule: {submodule.name} at {submodule_path}")
+            except ANY_GIT_ERROR as err:
+                if verbose_init:
+                    self.io.tool_error(f"Unable to read submodule {submodule.name} at {submodule_path}: {err}")
 
+    def get_all_repos(self):
+        """Return a list of all GitRepo instances, including submodules."""
+        repos = [self]
+        for submodule in self.submodules.values():
+            repos.extend(submodule.get_all_repos())
+        return repos
+    
+    def map_repo(self, func):
+        """Apply a function to all GitRepo instances, including submodules. Return a dict mapping each GitRepo to the function's result."""
+        res = {self: func(self)}
+        for submodule in self.submodules.values():
+            res.update(submodule.map_repo(func))
+        return res
+
+    def get_repo(self, fname):
+        """Return the GitRepo instance for a given file path."""
+        fname = Path(fname)
+        fname = fname.resolve()
+        rname = fname.relative_to(self.root).as_posix()
+        try:
+            if self.repo.untracked_files and rname in self.repo.untracked_files or self.repo.git.ls_files(rname, error_unmatch=True):
+                return self
+        except ANY_GIT_ERROR:
+            pass
+        
+        for submodule in self.submodules.values():
+            if submodule.get_repo(fname):
+                return submodule
+
+        return None
+
+    def get_repos_map(self, fnames):
+        """Return a set of GitRepo instances corresponding to the given file paths."""
+        repos = defaultdict(set)
+        for fname in fnames:
+            repo = self.get_repo(fname)
+            if repo:
+                repos[repo].add(fname)
+            else:
+                self.io.tool_warning(f"File {fname} is not tracked in any git repository.")
+        return repos
+
+    def rel_path_from_repo(self, source_repo, fname):
+        """Return the relative path of a file from the repo root.
+        Args:
+            source_repo (GitRepo): The GitRepo instance representing the source repository.
+            fname (str or Path): The file path relative to source_repo to be made relative to self.
+        Returns:
+            str: The relative path to self.
+        """
+        return str(Path(source_repo.root, fname).relative_to(self.root))
+    
+    def rel_paths_from_repo(self, source_repo, fnames):
+        """Return the absolute path of a file in self based on a relative path from source_repo.
+        Args:
+            source_repo (GitRepo): The GitRepo instance representing the source repository.
+            fnames (list[str or Path]): The list of file path relative to source_repo to be converted to an absolute path in self.
+        Returns:
+            list[str]: The list of relative paths in self.
+        """
+        return [self.rel_path_from_repo(source_repo, fname) for fname in fnames]
+        
     def commit(self, fnames=None, context=None, message=None, aider_edits=False, coder=None):
         """
         Commit the specified files or all dirty files if none are specified.
@@ -281,7 +370,7 @@ class GitRepo:
             fnames = [str(self.abs_root_path(fn)) for fn in fnames]
             for fname in fnames:
                 try:
-                    self.repo.git.add(fname)
+                    self.get_repo(fname).repo.git.add(fname)
                 except ANY_GIT_ERROR as err:
                     self.io.tool_error(f"Unable to add {fname}: {err}")
             cmd += ["--"] + fnames
@@ -391,7 +480,7 @@ class GitRepo:
 
         diffs = ""
         for fname in fnames:
-            if not self.path_in_repo(fname):
+            if not self.path_in_repo(fname, submodules=True):
                 diffs += f"Added {fname}\n"
 
         try:
@@ -430,7 +519,7 @@ class GitRepo:
 
         return diffs
 
-    def get_tracked_files(self):
+    def get_tracked_files(self, submodules=False):
         if not self.repo:
             return []
 
@@ -484,6 +573,12 @@ class GitRepo:
             self.io.tool_error(f"Unable to read staged files: {err}")
 
         res = [fname for fname in files if not self.ignored_file(fname)]
+
+        if submodules and self.submodules:
+            for name, submod in self.submodules.items():
+                res.remove(name)
+                submodule_files = submod.get_tracked_files(submodules=True)
+                res += [str((Path(submod.root) / fname).relative_to(self.root)) for fname in submodule_files]
 
         return res
 
@@ -564,13 +659,13 @@ class GitRepo:
 
         return self.aider_ignore_spec.match_file(fname)
 
-    def path_in_repo(self, path):
+    def path_in_repo(self, path, submodules=False):
         if not self.repo:
             return
         if not path:
             return
 
-        tracked_files = set(self.get_tracked_files())
+        tracked_files = set(self.get_tracked_files(submodules=submodules))
         normalized = self.normalize_path(path)
         return normalized in tracked_files
 

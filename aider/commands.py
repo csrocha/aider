@@ -588,7 +588,7 @@ class Commands:
         changed_files_last_commit = [item.a_path for item in last_commit.diff(prev_commit)]
 
         for fname in changed_files_last_commit:
-            if self.coder.repo.repo.is_dirty(path=fname):
+            if self.coder.repo.get_repo(fname).is_dirty(path=fname):
                 self.io.tool_error(
                     f"The file {fname} has uncommitted changes. Please stash them before undoing."
                 )
@@ -604,6 +604,7 @@ class Commands:
                 )
                 return
 
+        # TODO: Check if it requires iterate on all repositories, if there are submodules
         local_head = self.coder.repo.repo.git.rev_parse("HEAD")
         current_branch = self.coder.repo.repo.active_branch.name
         try:
@@ -625,7 +626,7 @@ class Commands:
         unrestored = set()
         for file_path in changed_files_last_commit:
             try:
-                self.coder.repo.repo.git.checkout("HEAD~1", file_path)
+                self.coder.repo.get_repo(file_path).git.checkout("HEAD~1", file_path)
                 restored.add(file_path)
             except ANY_GIT_ERROR:
                 unrestored.add(file_path)
@@ -641,8 +642,8 @@ class Commands:
             return
 
         # Move the HEAD back before the latest commit
-        self.coder.repo.repo.git.reset("--soft", "HEAD~1")
-
+        self.coder.repo.map_repos(lambda r: r.git.reset("--soft", "HEAD~1"))
+        
         self.io.tool_output(f"Removed: {last_commit_hash} {last_commit_message}")
 
         # Get the current HEAD after undo
@@ -869,7 +870,7 @@ class Commands:
                 continue
             elif abs_file_path in self.coder.abs_read_only_fnames:
                 # Determine if file can be promoted to editable
-                if self.coder.repo:
+                if self.coder.repo and self.coder.repo.path_in_repo(matched_file, submodules=True)::
                     can_edit = self.coder.repo.path_in_repo(matched_file)
                 else:
                     can_edit = abs_file_path.startswith(self.coder.root)

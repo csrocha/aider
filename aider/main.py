@@ -70,7 +70,7 @@ def guessed_wrong_repo(io, git_root, fnames, git_dname):
     """After we parse the args, we can determine the real repo. Did we guess wrong?"""
 
     try:
-        check_repo = Path(GitRepo(io, fnames, git_dname).root).resolve()
+        check_repo = Path(GitRepo(io, fnames, git_dname, verbose_init=False).root).resolve()
     except (OSError,) + ANY_GIT_ERROR:
         return
 
@@ -420,8 +420,14 @@ def sanity_check_repo(repo, io):
     bad_ver = False
     try:
         repo.get_tracked_files()
+        
+        for submod in repo.submodules.values():
+            if not sanity_check_repo(submod, io):
+                return False
+            
         if not repo.git_repo_error:
             return True
+        
         error_msg = str(repo.git_repo_error)
     except UnicodeDecodeError as exc:
         error_msg = (
@@ -927,7 +933,7 @@ def main(argv=None, input=None, output=None, force_git_root=None, return_coder=F
             return 1
 
     if repo and not args.skip_sanity_check_repo:
-        num_files = len(repo.get_tracked_files())
+        num_files = len(repo.get_tracked_files(submodules=True))
         analytics.event("repo", num_files=num_files)
     else:
         analytics.event("no-repo")
