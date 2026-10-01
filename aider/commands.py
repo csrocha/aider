@@ -1195,6 +1195,14 @@ class Commands:
         """Enter context mode to see surrounding code context. If no prompt provided, switches to context mode."""  # noqa
         return self._generic_chat_command(args, "context", placeholder=args.strip() or None)
 
+    def cmd_ok(self, args):
+        "Alias for `/code Ok, please go ahead and make those changes.` (any args are appended)"
+        msg = "Ok, please go ahead and make those changes."
+        extra = (args or "").strip()
+        if extra:
+            msg = f"{msg} {extra}"
+        return self.cmd_code(msg)
+
     def _generic_chat_command(self, args, edit_format, placeholder=None):
         if not args.strip():
             # Switch to the corresponding chat mode if no args provided

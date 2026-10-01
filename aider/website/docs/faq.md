@@ -264,16 +264,18 @@ tr:hover { background-color: #f5f5f5; }
 </style>
 <table>
 <tr><th>Model Name</th><th class='right'>Total Tokens</th><th class='right'>Percent</th></tr>
-<tr><td>openai/gpt-5.2</td><td class='right'>971,055</td><td class='right'>51.0%</td></tr>
-<tr><td>gpt-5</td><td class='right'>250,539</td><td class='right'>13.2%</td></tr>
-<tr><td>gemini/gemini-3-flash-preview</td><td class='right'>241,516</td><td class='right'>12.7%</td></tr>
-<tr><td>gemini/gemini-2.5-pro</td><td class='right'>222,047</td><td class='right'>11.7%</td></tr>
-<tr><td>gemini/gemini-3-pro-preview</td><td class='right'>81,851</td><td class='right'>4.3%</td></tr>
-<tr><td>None</td><td class='right'>45,450</td><td class='right'>2.4%</td></tr>
-<tr><td>o3-pro</td><td class='right'>36,620</td><td class='right'>1.9%</td></tr>
-<tr><td>gpt-5.2</td><td class='right'>27,427</td><td class='right'>1.4%</td></tr>
-<tr><td>gemini/gemini-2.5-flash-lite</td><td class='right'>15,470</td><td class='right'>0.8%</td></tr>
-<tr><td>gemini/gemini-2.5-flash-lite-preview-06-17</td><td class='right'>11,371</td><td class='right'>0.6%</td></tr>
+<tr><td>openai/gpt-5.2</td><td class='right'>982,120</td><td class='right'>38.8%</td></tr>
+<tr><td>gpt-5.4</td><td class='right'>775,412</td><td class='right'>30.6%</td></tr>
+<tr><td>gemini/gemini-3-flash-preview</td><td class='right'>241,516</td><td class='right'>9.5%</td></tr>
+<tr><td>gpt-5.2-codex</td><td class='right'>166,945</td><td class='right'>6.6%</td></tr>
+<tr><td>gpt-5.2</td><td class='right'>93,248</td><td class='right'>3.7%</td></tr>
+<tr><td>gemini/gemini-3-pro-preview</td><td class='right'>81,851</td><td class='right'>3.2%</td></tr>
+<tr><td>gpt-5.3-codex</td><td class='right'>64,402</td><td class='right'>2.5%</td></tr>
+<tr><td>gemini/gemini-2.5-pro</td><td class='right'>58,916</td><td class='right'>2.3%</td></tr>
+<tr><td>gpt-5</td><td class='right'>39,467</td><td class='right'>1.6%</td></tr>
+<tr><td>gpt-5.5</td><td class='right'>25,877</td><td class='right'>1.0%</td></tr>
+<tr><td>openai/gpt-5.4</td><td class='right'>278</td><td class='right'>0.0%</td></tr>
+<tr><td>openai/gpt-5.5</td><td class='right'>89</td><td class='right'>0.0%</td></tr>
 </table>
 <!--[[[end]]]-->
 
