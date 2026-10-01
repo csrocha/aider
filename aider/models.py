@@ -52,6 +52,9 @@ gpt-4-vision-preview
 gpt-4-1106-vision-preview
 gpt-4o-mini
 gpt-4o-mini-2024-07-18
+gpt-5.5
+gpt-5.5-pro
+gpt-5.5-chat-latest
 gpt-3.5-turbo
 gpt-3.5-turbo-0301
 gpt-3.5-turbo-0613
@@ -72,11 +75,20 @@ claude-3-opus-20240229
 claude-3-sonnet-20240229
 claude-3-5-sonnet-20240620
 claude-3-5-sonnet-20241022
+claude-3-7-sonnet-20250219
 claude-sonnet-4-20250514
 claude-opus-4-20250514
+claude-opus-4-1
+claude-opus-4-1-20250805
+claude-opus-4-5
+claude-opus-4-5-20251101
 claude-opus-4-6
+claude-opus-4-6-20260205
+claude-opus-4-7
+claude-opus-4-7-20260416
 claude-sonnet-4-5
 claude-sonnet-4-5-20250929
+claude-sonnet-4-6
 claude-haiku-4-5
 claude-haiku-4-5-20251001
 """
@@ -86,9 +98,9 @@ ANTHROPIC_MODELS = [ln.strip() for ln in ANTHROPIC_MODELS.splitlines() if ln.str
 # Mapping of model aliases to their canonical names
 MODEL_ALIASES = {
     # Claude models
-    "sonnet": "claude-sonnet-4-5",
+    "sonnet": "claude-sonnet-4-6",
     "haiku": "claude-haiku-4-5",
-    "opus": "claude-opus-4-6",
+    "opus": "claude-opus-4-7",
     # GPT models
     "4": "gpt-4-0613",
     "4o": "gpt-4o",
@@ -413,7 +425,11 @@ class Model(ModelSettings):
         if self.name.startswith("openrouter/"):
             if self.accepts_settings is None:
                 self.accepts_settings = []
-            if "thinking_tokens" not in self.accepts_settings:
+            if (
+                "thinking_tokens" not in self.accepts_settings
+                and "claude-opus-4.7" not in self.name
+                and "claude-opus-4-7" not in self.name
+            ):
                 self.accepts_settings.append("thinking_tokens")
             if "reasoning_effort" not in self.accepts_settings:
                 self.accepts_settings.append("reasoning_effort")
@@ -512,18 +528,17 @@ class Model(ModelSettings):
             self.reminder = "sys"
             return  # <--
 
-        if (
-            "sonnet-4-5" in model
-            or "opus-4-6" in model
-            or "haiku-4-5" in model
-            or "claude-sonnet-4-5" in model
-            or "claude-opus-4-6" in model
-            or "claude-haiku-4-5" in model
-        ):
+        if "sonnet-4-" in model or "opus-4-" in model or "haiku-4-" in model:
             self.edit_format = "diff"
             self.use_repo_map = True
             self.examples_as_sys_msg = False
-            if "thinking_tokens" not in self.accepts_settings:
+            if "opus-4-" in model:
+                self.use_temperature = False
+            if (
+                "thinking_tokens" not in self.accepts_settings
+                and "4.7" not in model
+                and "4-7" not in model
+            ):
                 self.accepts_settings.append("thinking_tokens")
             return  # <--
 

@@ -666,7 +666,8 @@ class GitRepo:
             return
 
         tracked_files = set(self.get_tracked_files(submodules=submodules))
-        return self.normalize_path(path) in tracked_files
+        normalized = self.normalize_path(path)
+        return normalized in tracked_files
 
     def abs_root_path(self, path):
         res = Path(self.root) / path
